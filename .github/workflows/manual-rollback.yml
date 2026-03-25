@@ -1,0 +1,51 @@
+name: manual-rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Rollback tag (e.g. deploy-20260325-120000)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  rollback-pages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout selected tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag }}
+
+      - name: Upload tagged site as Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
+
+  rollback-vercel:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.VERCEL_TOKEN != '' && secrets.VERCEL_ORG_ID != '' && secrets.VERCEL_PROJECT_ID != '' }}
+    steps:
+      - name: Checkout selected tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Deploy tagged site to Vercel
+        run: vercel deploy site --prod --token=${{ secrets.VERCEL_TOKEN }}
