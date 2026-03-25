@@ -1,0 +1,32 @@
+[
+  {
+    "name": "frontend-react-app",
+    "type": "react",
+    "description": "React 정적 번들",
+    "pathPrefix": "react-app",
+    "source": {
+      "url": "https://example.com/path/to/react-build.zip"
+    },
+    "indexDocument": "index.html"
+  },
+  {
+    "name": "python-docs",
+    "type": "python",
+    "description": "Sphinx HTML 결과물",
+    "pathPrefix": "python-docs",
+    "source": {
+      "url": "https://example.com/path/to/python-docs.zip"
+    },
+    "indexDocument": "index.html"
+  },
+  {
+    "name": "java-site",
+    "type": "java",
+    "description": "Maven/Gradle site 결과물",
+    "pathPrefix": "java-site",
+    "source": {
+      "url": "https://example.com/path/to/java-site.zip"
+    },
+    "indexDocument": "index.html"
+  }
+]

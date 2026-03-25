@@ -1,0 +1,95 @@
+name: aggregate-and-deploy
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */4 * * *"
+  repository_dispatch:
+    types: [artifact-ready]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: deploy-pipeline
+  cancel-in-progress: false
+
+jobs:
+  aggregate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Aggregate artifacts
+        run: bash scripts/aggregate_artifacts.sh config/projects.json site
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Upload deployment history metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: deploy-manifest
+          path: site/manifest.json
+
+  deploy-pages:
+    needs: aggregate
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+  deploy-vercel:
+    needs: aggregate
+    runs-on: ubuntu-latest
+    if: ${{ secrets.VERCEL_TOKEN != '' && secrets.VERCEL_ORG_ID != '' && secrets.VERCEL_PROJECT_ID != '' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Pull Vercel env
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build static output
+        run: bash scripts/aggregate_artifacts.sh config/projects.json site
+
+      - name: Deploy to Vercel (production)
+        run: vercel deploy site --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+  tag-snapshot:
+    needs: [deploy-pages, deploy-vercel]
+    if: ${{ always() && needs.deploy-pages.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create deployment tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          TAG_NAME="deploy-$(date -u +%Y%m%d-%H%M%S)"
+          git tag -a "$TAG_NAME" -m "Automated deployment snapshot"
+          git push origin "$TAG_NAME"
